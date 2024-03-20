@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
-#include <math.h>
 
 void printMat(double **mat, int n) {
     for(int i = 0; i < n; ++i)
@@ -11,13 +10,6 @@ void printMat(double **mat, int n) {
             printf("%lf ", mat[i][j]);
         }
         printf("\n");
-    }
-    printf("\n");
-}
-
-void printArr(double* arr, int n) {
-    for (int i = 0; i < n; ++i) {
-        printf("%lf ", arr[i]);
     }
     printf("\n");
 }
@@ -45,9 +37,12 @@ int main(int argc, char *argv[])
     // Broadcast n
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
+    int partition_size = n / size;
+    int remainder = n % size;
+
     // Allocating memory for matrix array in all processes
     mat = (double**)malloc(n * sizeof(double*));
-    for(i = 0; i < n; ++i)
+    for(i = 0; i < n; i++)
     {
         mat[i] = (double*)malloc(2 * n * sizeof(double));
     }
@@ -75,40 +70,25 @@ int main(int argc, char *argv[])
                 }
             }
         }
-
-        // Partial pivoting, TODO: check again, suspicious
-        for(i = n - 1; i > 0; --i)
-        {
-            if(mat[i-1][1] < mat[i][1])
-            {
-                for(j = 0; j < 2*n; ++j)
-                {
-                    d = mat[i][j];
-                    mat[i][j] = mat[i-1][j];
-                    mat[i-1][j] = d;
-                }
-            }
-        }
     }
 
     // Broadcast mat
-    for(i = 0; i < n; ++i)
+    for(i = 0; i < n; i++)
     {
         MPI_Bcast(mat[i], 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }
 
+    int start, end;
+
     // Reducing To Diagonal Matrix
-    MPI_Request *requests = (MPI_Request*)malloc(n * sizeof(MPI_Request));
     for(i = 0; i < n; ++i)
     {
-        for(j = 0; j < n; ++j)
-        {
-            requests[j] = MPI_REQUEST_NULL;
-        }
+        start = rank * partition_size + ((rank < remainder) ? rank : remainder);
+        end = start + partition_size + ((rank < remainder) ? 1 : 0);
 
-        for(j = 0; j < n; ++j)
+        for(j = start; j < end; ++j)
         {
-            if(j != i && j % size == rank)
+            if(j != i)
             {
                 d = mat[j][i] / mat[i][i];
 
@@ -116,49 +96,31 @@ int main(int argc, char *argv[])
                 {
                     mat[j][k] -= mat[i][k]*d;
                 }
-
-                // Non-blocking send of the changed row mat[j] to root
-                if (rank != 0) {
-                    MPI_Isend(mat[j], 2 * n, MPI_DOUBLE, 0, j, MPI_COMM_WORLD, &requests[j]);
-                }
             }
         }
 
-        // Wait for all non-blocking send operations to complete
-        MPI_Waitall(n, requests, MPI_STATUSES_IGNORE);
-
-        if (rank == 0) {
-            // If root, non-blocking receive of all the changed data
-            for(j = 0; j < n; ++j)
-            {
-                if (j != i && j % size != rank) {
-                    MPI_Irecv(mat[j], 2 * n, MPI_DOUBLE, MPI_ANY_SOURCE, j, MPI_COMM_WORLD, &requests[j]);
-                }
-            }
-
-            // Wait for all non-blocking receive operations to complete
-            MPI_Waitall(n, requests, MPI_STATUSES_IGNORE);
-        }
-        
-        // Then rebroadcast it for next iteration
-        for(j = 0; j < n; ++j)
-        {
-            MPI_Bcast(mat[j], 2 * n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-        }
-
-        // Synchronize all processes before the next iteration
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
-    free(requests);
-
-    if (rank == 0) {
-        for(i = 0; i < n; ++i) {
+        // Reduce row i
+        if (i >= start && i < end) {
             d = mat[i][i];
             for(j = 0; j < 2*n; ++j) {
                 mat[i][j] = mat[i][j]/d;
             }
         }
 
+        // Broadcast mat[start until end]
+        for(j = 0; j < n; j++)
+        {
+            int source_rank = j / partition_size;
+            if (source_rank < remainder) source_rank++;
+
+            MPI_Bcast(mat[j], 2 * n, MPI_DOUBLE, source_rank, MPI_COMM_WORLD);
+        }
+        
+        // Synchronize all processes before the next iteration
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+
+    if (rank == 0) {
         // Get the end time
         double end_time = MPI_Wtime();
 
@@ -172,7 +134,7 @@ int main(int argc, char *argv[])
     }
     
     // Destructing
-    for(i = 0; i < n; ++i)
+    for(i = 0; i < n; i++)
     {
         free(mat[i]);
     }
