@@ -50,29 +50,28 @@ int main(int argc, char *argv[])
 
     MPI_Bcast(&dim, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // case when dim = 3
-    // core = 2
+    // Column size
     int col_size = 2 * dim;
-    // initialize matrix
-
-    int rows_cnt = dim / size; // the numbber of rows to be processed by each process
+    
+    // Rows to be processed by each processes
+    int rows_cnt = dim / size; 
     if (dim % size != 0)
     {
         rows_cnt += 1;
     }
 
+    // Initialize matrix
     double *mat = (double *)malloc(rows_cnt * size * col_size * sizeof(double));
     int start_row = rank * rows_cnt;
     int end_row = start_row + rows_cnt;
 
-    // // the variable to store the chunk processed by each proceess
+    // Store the chunk processed by each processes
     double *chunk = (double *)malloc(col_size * rows_cnt * sizeof(double));
 
-    // // the pivot row for each process
+    // Pivot row for each processes
     double *pivot_row = (double *)malloc(col_size * sizeof(double));
 
-    // // input the m in main process
-
+    // Input Matrix
     if (rank == 0)
     {
         // Inputs the coefficients of the matrix
@@ -102,12 +101,12 @@ int main(int argc, char *argv[])
 
         start_time = MPI_Wtime();
 
-        // begin swapping if needed
+        // Begin swapping if needed
         for (int i = 0; i < dim; i++)
         {
             if (mat[i * col_size + i] == 0)
             {
-                // swap nearest row where mat[j][i] != 0
+                // Swap nearest row where mat[j][i] != 0
                 for (int j = i + 1; j < dim; j++)
                 {
                     if (mat[j * col_size + i] != 0.0)
@@ -133,7 +132,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    // partition
+    // Partition
     MPI_Scatter(mat, col_size * rows_cnt, MPI_DOUBLE, chunk,
                 col_size * rows_cnt, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
@@ -142,27 +141,30 @@ int main(int argc, char *argv[])
     for (int row = 0; row < dim; row++)
     {
         int row_rank = row / rows_cnt;
-        // if the row is supposed to be processed by current rank
+
+        // If the row is supposed to be processed by current process
         if (rank == row_rank)
         {
-            int curr_row = row % rows_cnt; // curr row is the row relative to the process rows
+            // curr_row is the row relative to the process rows
+            int curr_row = row % rows_cnt; 
             double pivot = chunk[curr_row * col_size + row];
+
             for (int col = row; col < col_size; col++)
             {
                 chunk[curr_row * col_size + col] /= pivot;
             }
 
-            // send the pivot to every other rows
-
+            // Send the pivot to every other rows
             for (int i = 0; i < size; i++)
             {
                 MPI_Isend(chunk + dim * curr_row * 2, col_size, MPI_DOUBLE, i, 0,
                           MPI_COMM_WORLD, &requests[i]);
             }
-            // eliminate the rows before it
+
+            // Perform Gaussian elimination on rows before the pivot row
             eliminate_col_from_pivot(0, curr_row, chunk + (curr_row * col_size), chunk, row, col_size);
 
-            // eliminate the rows after it
+            // Perform Gaussian elimination on rows after the pivot row
             eliminate_col_from_pivot(curr_row + 1, rows_cnt, chunk + (curr_row * col_size), chunk, row, col_size);
 
             for (int i = row_rank + 1; i < size; i++)
@@ -180,6 +182,7 @@ int main(int argc, char *argv[])
 
     MPI_Gather(chunk, rows_cnt * col_size, MPI_DOUBLE, mat, rows_cnt * col_size,
                MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
     if (rank == 0)
     {
         // Get the end time
@@ -194,7 +197,7 @@ int main(int argc, char *argv[])
         printMat(mat, dim);
     }
 
-    // // Destructing
+    // Destructing
     free(mat);
 
     MPI_Finalize();
