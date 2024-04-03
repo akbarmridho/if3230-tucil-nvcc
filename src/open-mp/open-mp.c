@@ -75,51 +75,52 @@ int main(int argc, char *argv[])
         }
     }
 
-    omp_set_num_threads(n_num);
-
     double start_time = omp_get_wtime();
 
-#pragma omp parallel
+#pragma omp parallel num_threads(n_num)
     {
         for (int i = 0; i < dim; i++)
         {
-            if (mat[i * col_size + 1] == 0)
+#pragma omp single
             {
-                for (int j = i + 1; j < dim; j++)
+                if (mat[i * col_size + 1] == 0)
                 {
-                    if (mat[j * col_size + i] != 0.0)
+                    for (int j = i + 1; j < dim; j++)
                     {
-                        for (int l = 0; l < col_size; l++)
+                        if (mat[j * col_size + i] != 0.0)
                         {
-                            double *row_a = &mat[i * col_size];
-                            double *row_b = &mat[j * col_size];
-                            double temp = row_a[l];
-                            row_a[l] = row_b[l];
-                            row_b[l] = temp;
+                            for (int l = 0; l < col_size; l++)
+                            {
+                                double *row_a = &mat[i * col_size];
+                                double *row_b = &mat[j * col_size];
+                                double temp = row_a[l];
+                                row_a[l] = row_b[l];
+                                row_b[l] = temp;
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    if (j == dim - 1)
-                    {
-                        printf("Inverse does not exist for this matrix");
-                        exit(0);
+                        if (j == dim - 1)
+                        {
+                            printf("Inverse does not exist for this matrix");
+                            exit(0);
+                        }
                     }
                 }
-            }
 
-            double scale = mat[i * col_size + i];
-            for (int j = 0; j < col_size; j++)
-            {
-                mat[i * col_size + j] /= scale;
+                double scale = mat[i * col_size + i];
+                for (int j = 0; j < col_size; j++)
+                {
+                    mat[i * col_size + j] /= scale;
+                }
             }
 
             if (i == dim - 1)
                 continue;
+
             eliminate_col_from_pivot(i + 1, dim, mat + i * col_size, mat, i, col_size);
         }
         for (int i = dim - 1; i >= 1; i--)
         {
-
             eliminate_col_from_pivot(0, i, mat + i * col_size, mat, i, col_size);
         }
     }
