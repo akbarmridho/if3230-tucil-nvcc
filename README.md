@@ -29,3 +29,13 @@ Manual
 Script
 
 `sh ./test_mpi.sh`
+
+### OpenMP
+
+Manual
+
+`cat ./test_cases/{test_case}.txt | ./bin/omp {n_core}`
+
+Script
+
+`sh ./test_omp.sh`
