@@ -6,9 +6,31 @@ Tugas Kecil IF3230 Sistem Paralel dan Terdistribusi
 - Jeffrey Chow (13521046)
 - Akbar Maulana Ridho (13521093)
 
-## How to Run
+## How to Compile
 
-Jalankan perintah `make` pada root folder repository. 
+### Compile all
+
+Run `make` on root folder.
+
+### Compile serial
+
+Run `make serial` or `g++ src/serial/serial.cpp -o bin/serial` on root folder.
+
+### Compile OpenMPI
+
+Make sure OpenMPI is installed. Run `sudo apt install openmpi-bin libopenmpi-dev` to install OpenMPI.
+
+Run `make mpi` or `mpicc src/open-mpi/mpi.c -o bin/mpi` on root folder.
+
+### Compile OpenMP
+
+Run `make omp` or `gcc src/open-mp/open-mp.c -fopenmp -o bin/omp` on root folder.
+
+### Compile CUDA
+
+Run `make cuda` or `nvcc src/cuda/cuda.cu -o bin/cuda` on root folder.
+
+## How to Run
 
 ### Serial
 
